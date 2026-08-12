@@ -14,26 +14,32 @@ import {
 type FieldName = keyof PayoutInputs;
 type InputValues = Record<FieldName, string>;
 type FieldErrors = Partial<Record<FieldName, string>>;
-type CopyState =
+type ImageAction = "copy" | "download";
+type ImageActionState =
   | { phase: "idle" }
-  | { phase: "copying" }
-  | { phase: "copied" }
-  | { phase: "fallback" | "error"; message: string };
+  | { phase: "rendering"; action: ImageAction }
+  | { phase: "copied" | "downloaded" }
+  | { phase: "error"; message: string };
 
-const DOWNLOAD_FALLBACK_MESSAGE =
-  "Clipboard access is unavailable, so the PNG was downloaded instead.";
+const MAX_IMAGE_PAID_PLACES = 20;
+const IMAGE_PLACE_LIMIT_MESSAGE =
+  "Payout schedules with more than 20 paid places cannot be copied or downloaded as an image.";
 
-const downloadPng = (blob: Blob) => {
+const payoutImageFilename = (date: Date) => {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}-${pad(date.getMinutes())}`;
+  return `pokerprize_${day}_${time}.png`;
+};
+
+const downloadPng = (blob: Blob, downloadedAt = new Date()) => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "payout-schedule.png";
+  link.download = payoutImageFilename(downloadedAt);
   link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 0);
 };
-
-const isClipboardPermissionDenied = (error: unknown) =>
-  error instanceof DOMException && error.name === "NotAllowedError";
 
 const initialValues: InputValues = {
   totalPrizePool: "",
@@ -141,82 +147,75 @@ const evaluatePayoutForm = (values: InputValues) => {
 export function App() {
   const [values, setValues] = useState<InputValues>(initialValues);
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
-  const [copyState, setCopyState] = useState<CopyState>({ phase: "idle" });
+  const [imageActionState, setImageActionState] = useState<ImageActionState>({
+    phase: "idle",
+  });
   const payoutImageRef = useRef<HTMLDivElement>(null);
-  const copyAttemptRef = useRef(0);
+  const imageActionAttemptRef = useRef(0);
   const evaluation = useMemo(() => evaluatePayoutForm(values), [values]);
+  const imageActionsDisabled =
+    imageActionState.phase === "rendering" ||
+    (evaluation.result?.ok &&
+      evaluation.result.paidPlaceCount > MAX_IMAGE_PAID_PLACES);
 
   const updateValue = (name: FieldName, value: string) => {
-    copyAttemptRef.current += 1;
+    imageActionAttemptRef.current += 1;
     setValues((current) => ({ ...current, [name]: value }));
     setTouched((current) => ({ ...current, [name]: false }));
-    setCopyState({ phase: "idle" });
+    setImageActionState({ phase: "idle" });
   };
 
   const copyPayoutImage = () => {
     const element = payoutImageRef.current;
-    if (!element || copyState.phase === "copying") return;
-    const copyAttempt = ++copyAttemptRef.current;
-    const isCurrentAttempt = () => copyAttemptRef.current === copyAttempt;
+    if (!element || imageActionsDisabled) return;
+    const imageActionAttempt = ++imageActionAttemptRef.current;
+    const isCurrentAttempt = () =>
+      imageActionAttemptRef.current === imageActionAttempt;
+
+    if (
+      typeof ClipboardItem === "undefined" ||
+      typeof navigator.clipboard?.write !== "function" ||
+      (typeof ClipboardItem.supports === "function" &&
+        !ClipboardItem.supports("image/png"))
+    ) {
+      setImageActionState({
+        phase: "error",
+        message: "The payout schedule image could not be copied.",
+      });
+      return;
+    }
 
     const scale = planPayoutImageScale(element);
     if (scale === null) {
-      setCopyState({
+      setImageActionState({
         phase: "error",
         message: "This payout schedule is too long to copy as one image.",
       });
       return;
     }
 
-    setCopyState({ phase: "copying" });
+    setImageActionState({ phase: "rendering", action: "copy" });
     const imageBlobPromise = renderPayoutScheduleImage(element, scale);
 
     const reportRenderFailure = () => {
       if (!isCurrentAttempt()) return;
-      setCopyState({
+      setImageActionState({
         phase: "error",
         message: "The payout schedule image could not be created.",
       });
     };
-
-    const downloadFallback = () => {
-      void imageBlobPromise.then((blob) => {
-        if (!isCurrentAttempt()) return;
-        downloadPng(blob);
-        setCopyState({
-          phase: "fallback",
-          message: DOWNLOAD_FALLBACK_MESSAGE,
-        });
-      }, reportRenderFailure);
-    };
-
-    if (
-      typeof ClipboardItem === "undefined" ||
-      typeof navigator.clipboard?.write !== "function"
-    ) {
-      downloadFallback();
-      return;
-    }
-
-    if (
-      typeof ClipboardItem.supports === "function" &&
-      !ClipboardItem.supports("image/png")
-    ) {
-      downloadFallback();
-      return;
-    }
 
     try {
       const item = new ClipboardItem({ "image/png": imageBlobPromise });
       void navigator.clipboard.write([item]).then(
         () => {
           if (!isCurrentAttempt()) return;
-          setCopyState({ phase: "copied" });
+          setImageActionState({ phase: "copied" });
           window.setTimeout(() => {
-            if (isCurrentAttempt()) setCopyState({ phase: "idle" });
+            if (isCurrentAttempt()) setImageActionState({ phase: "idle" });
           }, 1_600);
         },
-        async (error: unknown) => {
+        async () => {
           try {
             await imageBlobPromise;
           } catch {
@@ -224,28 +223,64 @@ export function App() {
             return;
           }
 
-          if (isClipboardPermissionDenied(error)) {
-            downloadFallback();
-            return;
-          }
-
           if (!isCurrentAttempt()) return;
-          setCopyState({
+          setImageActionState({
             phase: "error",
             message: "The payout schedule image could not be copied.",
           });
         },
       );
-    } catch (error) {
-      if (isClipboardPermissionDenied(error)) {
-        downloadFallback();
-        return;
-      }
-      setCopyState({
+    } catch {
+      void imageBlobPromise.catch(() => undefined);
+      setImageActionState({
         phase: "error",
         message: "The payout schedule image could not be copied.",
       });
     }
+  };
+
+  const downloadPayoutImage = () => {
+    const element = payoutImageRef.current;
+    if (!element || imageActionsDisabled) return;
+    const imageActionAttempt = ++imageActionAttemptRef.current;
+    const isCurrentAttempt = () =>
+      imageActionAttemptRef.current === imageActionAttempt;
+
+    const scale = planPayoutImageScale(element);
+    if (scale === null) {
+      setImageActionState({
+        phase: "error",
+        message: "This payout schedule is too long to download as one image.",
+      });
+      return;
+    }
+
+    setImageActionState({ phase: "rendering", action: "download" });
+    void renderPayoutScheduleImage(element, scale).then(
+      (blob) => {
+        if (!isCurrentAttempt()) return;
+        try {
+          downloadPng(blob);
+        } catch {
+          setImageActionState({
+            phase: "error",
+            message: "The payout schedule image could not be downloaded.",
+          });
+          return;
+        }
+        setImageActionState({ phase: "downloaded" });
+        window.setTimeout(() => {
+          if (isCurrentAttempt()) setImageActionState({ phase: "idle" });
+        }, 1_600);
+      },
+      () => {
+        if (!isCurrentAttempt()) return;
+        setImageActionState({
+          phase: "error",
+          message: "The payout schedule image could not be created.",
+        });
+      },
+    );
   };
 
   return (
@@ -264,10 +299,10 @@ export function App() {
           <button
             type="button"
             onClick={() => {
-              copyAttemptRef.current += 1;
+              imageActionAttemptRef.current += 1;
               setValues(initialValues);
               setTouched({});
-              setCopyState({ phase: "idle" });
+              setImageActionState({ phase: "idle" });
             }}
           >
             Reset
@@ -351,21 +386,41 @@ export function App() {
               </p>
             )}
           </div>
-          <div className="copy-actions">
-            <button
-              type="button"
-              disabled={copyState.phase === "copying"}
-              onClick={copyPayoutImage}
-            >
-              {copyState.phase === "copying"
-                ? "Copying…"
-                : copyState.phase === "copied"
-                  ? "Copied!"
-                  : "Copy image"}
-            </button>
-            {"message" in copyState && (
-              <p className="copy-message" role="status">
-                {copyState.message}
+          <div className="image-actions">
+            <div className="image-action-buttons">
+              <button
+                type="button"
+                disabled={imageActionsDisabled}
+                onClick={copyPayoutImage}
+              >
+                {imageActionState.phase === "rendering" &&
+                imageActionState.action === "copy"
+                  ? "Copying…"
+                  : imageActionState.phase === "copied"
+                    ? "Copied!"
+                    : "Copy image"}
+              </button>
+              <button
+                type="button"
+                disabled={imageActionsDisabled}
+                onClick={downloadPayoutImage}
+              >
+                {imageActionState.phase === "rendering" &&
+                imageActionState.action === "download"
+                  ? "Downloading…"
+                  : imageActionState.phase === "downloaded"
+                    ? "Downloaded!"
+                    : "Download image"}
+              </button>
+            </div>
+            {evaluation.result.paidPlaceCount > MAX_IMAGE_PAID_PLACES && (
+              <p className="image-action-message">
+                {IMAGE_PLACE_LIMIT_MESSAGE}
+              </p>
+            )}
+            {"message" in imageActionState && (
+              <p className="image-action-message" role="status">
+                {imageActionState.message}
               </p>
             )}
           </div>

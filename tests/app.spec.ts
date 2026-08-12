@@ -213,24 +213,24 @@ test("organizer can copy the complete payout schedule as a PNG", async ({
 }) => {
   await installImageClipboard(page);
   await page.goto("/");
-  await enterEqualPayoutSchedule(page, "1250");
 
   const result = page.getByRole("region", { name: "Payout schedule" });
-  const copy = result.getByRole("button");
+  const copy = result.locator(".image-action-buttons button").first();
   const rows = page.getByRole("row");
-  await expect(rows).toHaveCount(50);
+  await enterEqualPayoutSchedule(page, "500");
+  await expect(rows).toHaveCount(20);
   await expect(copy).toHaveText("Copy image");
   await expect(rows.last()).not.toBeInViewport();
 
   const resultBounds = await result.boundingBox();
   const copyBounds = await copy.boundingBox();
   const distribution = page.getByText(
-    "Distributed: 1 250 kr of 1 250 kr",
+    "Distributed: 500 kr of 500 kr",
     { exact: true },
   );
   const contentBounds = await visibleBounds([
     page.getByRole("heading", { name: "Payout schedule" }),
-    page.getByText("50 paid places", { exact: true }),
+    page.getByText("20 paid places", { exact: true }),
     ...(await page.getByRole("rowheader").all()),
     ...(await page.getByRole("cell").all()),
   ]);
@@ -251,7 +251,7 @@ test("organizer can copy the complete payout schedule as a PNG", async ({
     Math.round(resultBounds!.width * 2) - 4,
   );
   expect(image!.height).toBeLessThan(Math.round(resultBounds!.height * 2));
-  expect(image!.height).toBeGreaterThan(4_000);
+  expect(image!.height).toBeGreaterThan(1_500);
   expect(image!.alpha).toBe(255);
   expect(image!.lightPixels.top).toBeGreaterThan(50);
   expect(image!.lightPixels.middle).toBeGreaterThan(50);
@@ -263,15 +263,15 @@ test("organizer can copy the complete payout schedule as a PNG", async ({
   expect(image!.height / 2).toBeLessThan(copyBounds!.y - resultBounds!.y);
 
   const contentPixelCounts = image!.contentPixelCounts!;
-  expect(contentPixelCounts).toHaveLength(152);
+  expect(contentPixelCounts).toHaveLength(62);
   expect(
     contentPixelCounts
       .map((count, index) => ({ count, index }))
       .filter(({ count }) => count <= 5),
   ).toEqual([]);
 
-  await expect(page.getByLabel("Total prize pool")).toHaveValue("1250");
-  await expect(rows).toHaveCount(50);
+  await expect(page.getByLabel("Total prize pool")).toHaveValue("500");
+  await expect(rows).toHaveCount(20);
   await expect(copy).toHaveText("Copy image", { timeout: 3_000 });
 });
 
@@ -284,9 +284,12 @@ test("late copy completion does not show feedback for a newer payout schedule", 
 
   const copy = page
     .getByRole("region", { name: "Payout schedule" })
-    .getByRole("button");
+    .locator(".image-action-buttons button")
+    .first();
+  const download = page.locator(".image-action-buttons button").last();
   await copy.click();
   await expect(copy).toHaveText("Copying…");
+  await expect(download).toBeDisabled();
   await page.getByLabel("Total prize pool").fill("225");
 
   await expect(copy).toHaveText("Copy image");
@@ -296,67 +299,66 @@ test("late copy completion does not show feedback for a newer payout schedule", 
   await expect(page.getByText("Copied!", { exact: true })).toBeHidden();
 });
 
-test("organizer receives a PNG download when image clipboard access is unavailable", async ({
+test("unavailable image clipboard access shows an error without downloading", async ({
   page,
 }) => {
   await installImageClipboard(page, "unavailable");
+  let downloadCount = 0;
+  page.on("download", () => downloadCount++);
   await page.goto("/");
   await page.getByLabel("Total prize pool").fill("200");
 
-  const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: "Copy image" }).click();
+  await expect(
+    page.getByText("The payout schedule image could not be copied."),
+  ).toBeVisible();
+  expect(downloadCount).toBe(0);
+
+  await page.getByLabel("Total prize pool").fill("225");
+  await expect(
+    page.getByText("The payout schedule image could not be copied."),
+  ).toBeHidden();
+});
+
+test("denied clipboard permission shows an error without downloading", async ({
+  page,
+}) => {
+  await installImageClipboard(page, "denied");
+  let downloadCount = 0;
+  page.on("download", () => downloadCount++);
+  await page.goto("/");
+  await page.getByLabel("Total prize pool").fill("200");
+
+  await page.getByRole("button", { name: "Copy image" }).click();
+  await expect(
+    page.getByText("The payout schedule image could not be copied."),
+  ).toBeVisible();
+  expect(downloadCount).toBe(0);
+});
+
+test("organizer can explicitly download the payout schedule as a timestamped PNG", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByLabel("Total prize pool").fill("200");
+
+  const imageActionButtons = page.locator(".image-action-buttons button");
+  const copy = imageActionButtons.first();
+  const downloadButton = imageActionButtons.last();
+  const downloadPromise = page.waitForEvent("download");
+  await downloadButton.click();
   const download = await downloadPromise;
 
-  expect(download.suggestedFilename()).toBe("payout-schedule.png");
+  expect(download.suggestedFilename()).toMatch(
+    /^pokerprize_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.png$/,
+  );
   const downloadedPng = await downloadBytes(download);
   expect(downloadedPng.subarray(0, 8)).toEqual(
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
   );
-  await expect(
-    page.getByText(
-      "Clipboard access is unavailable, so the PNG was downloaded instead.",
-    ),
-  ).toBeVisible();
-
-  await page.getByLabel("Total prize pool").fill("225");
-  await expect(
-    page.getByText(
-      "Clipboard access is unavailable, so the PNG was downloaded instead.",
-    ),
-  ).toBeHidden();
-  const retryDownloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Copy image" }).click();
-  await retryDownloadPromise;
-});
-
-test("organizer receives a PNG download when clipboard permission is denied", async ({
-  page,
-}) => {
-  await installImageClipboard(page, "denied");
-  await page.goto("/");
-  await page.getByLabel("Total prize pool").fill("200");
-
-  const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Copy image" }).click();
-  const download = await downloadPromise;
-
-  expect(download.suggestedFilename()).toBe("payout-schedule.png");
-  const downloadedPng = await downloadBytes(download);
-  const intendedPng = await page.evaluate(async () =>
-    Array.from(
-      new Uint8Array(
-        await (
-          window as Window & { __intendedPayoutImage: Blob }
-        ).__intendedPayoutImage.arrayBuffer(),
-      ),
-    ),
-  );
-  expect(downloadedPng).toEqual(Buffer.from(intendedPng));
-  await expect(
-    page.getByText(
-      "Clipboard access is unavailable, so the PNG was downloaded instead.",
-    ),
-  ).toBeVisible();
+  await expect(downloadButton).toHaveText("Downloaded!");
+  await expect(copy).toBeEnabled();
+  await expect(downloadButton).toHaveText("Download image", { timeout: 3_000 });
 });
 
 test("organizer sees a retryable error after an unexpected clipboard failure", async ({
@@ -432,52 +434,34 @@ test("organizer sees a rendering error without a download", async ({ page }) => 
   await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible();
 });
 
-test("a moderately long payout schedule is copied at 1x density", async ({
+test("image actions are disabled above 20 paid places", async ({
   page,
 }) => {
   await installImageClipboard(page);
   await page.goto("/");
-  await enterEqualPayoutSchedule(page, "2500");
-
-  const result = page.getByRole("region", { name: "Payout schedule" });
-  const resultBounds = await result.boundingBox();
-  await result.getByRole("button", { name: "Copy image" }).click();
-  await expect(result.getByRole("button")).toHaveText("Copied!");
-
-  const image = await inspectCopiedImage(page);
-  expect(image).not.toBeNull();
-  expect(image!.width).toBeGreaterThanOrEqual(Math.round(resultBounds!.width) - 2);
-  expect(image!.width).toBeLessThanOrEqual(Math.round(resultBounds!.width));
-  expect(image!.height).toBeGreaterThan(4_000);
-  expect(image!.height).toBeLessThanOrEqual(8_192);
-});
-
-test("a payout schedule unsafe at 1x is refused without creating an image", async ({
-  page,
-}) => {
-  await installImageClipboard(page);
-  let downloadCount = 0;
-  page.on("download", () => downloadCount++);
-  await page.goto("/");
-  await enterEqualPayoutSchedule(page, "5000");
+  await enterEqualPayoutSchedule(page, "525");
 
   const rows = page.getByRole("row");
-  await expect(rows).toHaveCount(200);
-  await page.getByRole("button", { name: "Copy image" }).click();
-
+  const copy = page.getByRole("button", { name: "Copy image" });
+  const download = page.getByRole("button", { name: "Download image" });
+  await expect(rows).toHaveCount(21);
+  await expect(copy).toBeDisabled();
+  await expect(download).toBeDisabled();
   await expect(
-    page.getByText("This payout schedule is too long to copy as one image."),
+    page.getByText(
+      "Payout schedules with more than 20 paid places cannot be copied or downloaded as an image.",
+    ),
   ).toBeVisible();
-  await expect(rows).toHaveCount(200);
-  expect(await inspectCopiedImage(page)).toBeNull();
-  expect(downloadCount).toBe(0);
 
-  await page.getByLabel("Total prize pool").fill("200");
+  await page.getByLabel("Total prize pool").fill("500");
+  await expect(rows).toHaveCount(20);
+  await expect(copy).toBeEnabled();
+  await expect(download).toBeEnabled();
   await expect(
-    page.getByText("This payout schedule is too long to copy as one image."),
+    page.getByText(
+      "Payout schedules with more than 20 paid places cannot be copied or downloaded as an image.",
+    ),
   ).toBeHidden();
-  await page.getByRole("button", { name: "Copy image" }).click();
-  await expect(page.getByRole("button", { name: "Copied!" })).toBeVisible();
 });
 
 test("organizer can calculate a one-place payout schedule", async ({ page }) => {
@@ -651,7 +635,7 @@ test("organizer is told when rounding reduces the paid-place count", async ({
   const resultBounds = await result.boundingBox();
   const noteBounds = await reductionNote.boundingBox();
   await result.getByRole("button", { name: "Copy image" }).click();
-  await expect(result.getByRole("button")).toHaveText("Copied!");
+  await expect(result.getByRole("button", { name: "Copied!" })).toBeVisible();
 
   const image = await inspectCopiedImage(page, {
     result: resultBounds!,

@@ -195,7 +195,7 @@ input[aria-invalid="true"] {
   background: linear-gradient(145deg, rgb(19 67 57 / 96%), rgb(10 43 37 / 98%));
 }
 
-.copy-actions {
+.image-actions {
   display: grid;
   justify-items: start;
   gap: 9px;
@@ -203,7 +203,13 @@ input[aria-invalid="true"] {
   border-top: 1px solid rgb(255 255 255 / 7%);
 }
 
-.copy-message {
+.image-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.image-action-message {
   margin: 0;
   color: #b9cec5;
   font-size: 0.76rem;
@@ -289,7 +295,7 @@ td {
     padding: 15px;
   }
 
-  .copy-actions {
+  .image-actions {
     padding-right: 15px;
     padding-bottom: 15px;
     padding-left: 15px;
