@@ -36,6 +36,19 @@ const fields: Array<{
 const formatNok = (value: number) =>
   `${new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value)} kr`;
 
+const percentageFormatter = new Intl.NumberFormat("nb-NO", {
+  style: "percent",
+  maximumFractionDigits: 1,
+});
+
+const formatPayoutShare = (payout: number, totalPrizePool: number) => {
+  const share = payout / totalPrizePool;
+  if (share > 0 && share < 0.001) {
+    return `<${percentageFormatter.format(0.001)}`;
+  }
+  return percentageFormatter.format(share);
+};
+
 const parseWholeNok = (raw: string) => {
   if (!/^\d+$/.test(raw)) return null;
   const value = Number(raw);
@@ -189,7 +202,13 @@ export function App() {
               {evaluation.result.payouts.map((payout, index) => (
                 <tr key={index}>
                   <th scope="row">#{index + 1}</th>
-                  <td>{formatNok(payout)}</td>
+                  <td className="payout-amount">{formatNok(payout)}</td>
+                  <td className="payout-share">
+                    {formatPayoutShare(
+                      payout,
+                      evaluation.result.distributedTotal,
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

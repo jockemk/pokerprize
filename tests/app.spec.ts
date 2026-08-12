@@ -30,9 +30,25 @@ test("organizer can calculate a clean multi-place payout schedule", async ({
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("#1");
   await expect(rows.nth(0)).toContainText("400 kr");
+  await expect(rows.nth(0)).toContainText("57,1 %");
+  await expect(rows.nth(1)).toContainText("28,6 %");
   await expect(rows.nth(2)).toContainText("#3");
   await expect(rows.nth(2)).toContainText("100 kr");
+  await expect(rows.nth(2)).toContainText("14,3 %");
   await expect(page.getByText("3 paid places", { exact: true })).toBeVisible();
+});
+
+test("one-place and tiny payout shares remain truthful", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Total prize pool").fill("200");
+  await expect(page.getByRole("row")).toContainText("100 %");
+
+  await page.getByLabel("Payout ratio").fill("10");
+  await page.getByLabel("Minimum payout").fill("25");
+  await page.getByLabel("Total prize pool").fill("1000000");
+
+  const rows = page.getByRole("row");
+  await expect(rows.last()).toContainText("<0,1 %");
 });
 
 test("organizer can enter the payout ratio with a comma", async ({ page }) => {
@@ -161,6 +177,9 @@ test("the calculator remains contained on iPhone portrait and landscape", async 
     "inputmode",
     "decimal",
   );
+  await page.getByLabel("Total prize pool").fill("1000000");
+  await expect(page.getByRole("table")).toBeVisible();
+  await expect(page.getByRole("columnheader")).toHaveCount(0);
 
   const portraitMetrics = await page.evaluate(() => ({
     viewportWidth: document.documentElement.clientWidth,

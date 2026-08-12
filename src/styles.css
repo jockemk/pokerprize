@@ -213,6 +213,15 @@ td {
   font-size: 1.03rem;
   font-weight: 800;
   text-align: right;
+  white-space: nowrap;
+}
+
+.payout-share {
+  width: 4.5rem;
+  padding-left: 12px;
+  color: #a7c0b6;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .distribution-total {
