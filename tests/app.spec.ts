@@ -72,6 +72,24 @@ test("validation waits for a partial ratio edit and hides a stale result", async
   await expect(page.getByRole("table")).toBeHidden();
 });
 
+test("partial ratio validation is deferred again after returning to the field", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const ratio = page.getByLabel("Payout ratio");
+  await ratio.focus();
+  await ratio.blur();
+  await ratio.fill("1,");
+
+  await expect(
+    page.getByText("Enter a payout ratio of 1.00 or more with up to two decimals."),
+  ).toBeHidden();
+  await ratio.blur();
+  await expect(
+    page.getByText("Enter a payout ratio of 1.00 or more with up to two decimals."),
+  ).toBeVisible();
+});
+
 test("organizer receives actionable guidance above the schedule limit", async ({
   page,
 }) => {
@@ -164,5 +182,7 @@ test("the calculator remains contained on iPhone portrait and landscape", async 
     landscapeMetrics.viewportWidth,
   );
   expect(landscapeMetrics.mainWidth).toBeLessThanOrEqual(430);
-  await expect(page.getByRole("heading", { name: "Prize calculator" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Payout calculator" }),
+  ).toBeVisible();
 });

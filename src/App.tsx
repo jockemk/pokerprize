@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import {
   calculatePayoutSchedule,
+  PAYOUT_ERROR_MESSAGES,
   type PayoutCalculation,
   type PayoutInputs,
 } from "./calculator";
@@ -32,10 +33,6 @@ const fields: Array<{
   },
 ];
 
-const wholeNokError = "Enter a positive whole NOK amount.";
-const payoutRatioError =
-  "Enter a payout ratio of 1.00 or more with up to two decimals.";
-
 const formatNok = (value: number) =>
   `${new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value)} kr`;
 
@@ -60,6 +57,11 @@ const isDefinitivelyInvalid = (name: FieldName, raw: string) => {
   return parseWholeNok(raw) === null;
 };
 
+const isCompleteValidEntry = (name: FieldName, raw: string) =>
+  name === "payoutRatio"
+    ? parsePayoutRatio(raw) !== null
+    : parseWholeNok(raw) !== null;
+
 const evaluate = (values: InputValues) => {
   const errors: FieldErrors = {};
   const totalPrizePool = parseWholeNok(values.totalPrizePool);
@@ -67,10 +69,18 @@ const evaluate = (values: InputValues) => {
   const minimumPayout = parseWholeNok(values.minimumPayout);
   const roundingIncrement = parseWholeNok(values.roundingIncrement);
 
-  if (totalPrizePool === null) errors.totalPrizePool = wholeNokError;
-  if (payoutRatio === null) errors.payoutRatio = payoutRatioError;
-  if (minimumPayout === null) errors.minimumPayout = wholeNokError;
-  if (roundingIncrement === null) errors.roundingIncrement = wholeNokError;
+  if (totalPrizePool === null) {
+    errors.totalPrizePool = PAYOUT_ERROR_MESSAGES.positiveWholeNok;
+  }
+  if (payoutRatio === null) {
+    errors.payoutRatio = PAYOUT_ERROR_MESSAGES.payoutRatio;
+  }
+  if (minimumPayout === null) {
+    errors.minimumPayout = PAYOUT_ERROR_MESSAGES.positiveWholeNok;
+  }
+  if (roundingIncrement === null) {
+    errors.roundingIncrement = PAYOUT_ERROR_MESSAGES.positiveWholeNok;
+  }
 
   if (Object.keys(errors).length > 0) {
     return { result: null, errors, formError: null };
@@ -98,15 +108,16 @@ export function App() {
 
   const updateValue = (name: FieldName, value: string) => {
     setValues((current) => ({ ...current, [name]: value }));
+    setTouched((current) => ({ ...current, [name]: false }));
   };
 
   return (
     <main>
       <header>
         <p className="eyebrow">Poker tournament</p>
-        <h1>Prize calculator</h1>
+        <h1>Payout calculator</h1>
         <p className="intro">
-          Turn one prize pool into a clean, exact payout schedule.
+          Turn one total prize pool into a clean, exact payout schedule.
         </p>
       </header>
 
@@ -126,7 +137,9 @@ export function App() {
         {fields.map(({ name, label, inputMode }) => {
           const showError =
             Boolean(evaluation.errors[name]) &&
-            (Boolean(touched[name]) || isDefinitivelyInvalid(name, values[name]));
+            (Boolean(touched[name]) ||
+              isDefinitivelyInvalid(name, values[name]) ||
+              isCompleteValidEntry(name, values[name]));
           const errorId = `${name}-error`;
           return (
             <label key={name}>

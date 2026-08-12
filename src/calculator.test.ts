@@ -311,4 +311,20 @@ describe("calculatePayoutSchedule", () => {
       }),
     ).toMatchObject({ ok: false, code: "invalid-total-prize-pool" });
   });
+
+  it("returns 1,000 places when larger ideal counts are rounded-infeasible", () => {
+    const result = calculatePayoutSchedule({
+      totalPrizePool: 100_000,
+      payoutRatio: 1,
+      minimumPayout: 99,
+      roundingIncrement: 100,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      paidPlaceCount: 1_000,
+      paidPlaceCountReducedByRounding: true,
+    });
+    if (result.ok) expect(result.payouts).toHaveLength(1_000);
+  });
 });

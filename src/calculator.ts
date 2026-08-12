@@ -22,6 +22,12 @@ export type CalculationError = {
 
 export type PayoutCalculation = PayoutSchedule | CalculationError;
 
+export const PAYOUT_ERROR_MESSAGES = {
+  positiveWholeNok: "Enter a positive whole NOK amount.",
+  payoutRatio:
+    "Enter a payout ratio of 1.00 or more with up to two decimals.",
+} as const;
+
 const calculationError = (
   code: string,
   message: string,
@@ -44,7 +50,7 @@ const validateInputs = (inputs: PayoutInputs): CalculationError | null => {
   if (!isPositiveSafeInteger(inputs.totalPrizePool)) {
     return calculationError(
       "invalid-total-prize-pool",
-      "Enter a positive whole NOK amount.",
+      PAYOUT_ERROR_MESSAGES.positiveWholeNok,
       "totalPrizePool",
     );
   }
@@ -55,21 +61,21 @@ const validateInputs = (inputs: PayoutInputs): CalculationError | null => {
   ) {
     return calculationError(
       "invalid-payout-ratio",
-      "Enter a payout ratio of 1.00 or more with up to two decimals.",
+      PAYOUT_ERROR_MESSAGES.payoutRatio,
       "payoutRatio",
     );
   }
   if (!isPositiveSafeInteger(inputs.minimumPayout)) {
     return calculationError(
       "invalid-minimum-payout",
-      "Enter a positive whole NOK amount.",
+      PAYOUT_ERROR_MESSAGES.positiveWholeNok,
       "minimumPayout",
     );
   }
   if (!isPositiveSafeInteger(inputs.roundingIncrement)) {
     return calculationError(
       "invalid-rounding-increment",
-      "Enter a positive whole NOK amount.",
+      PAYOUT_ERROR_MESSAGES.positiveWholeNok,
       "roundingIncrement",
     );
   }
@@ -103,7 +109,7 @@ const maximumIdealPaidPlaceCount = ({
   let geometricSum = 1;
   let nextPower = 1;
 
-  while (paidPlaceCount < 1_001) {
+  while (true) {
     nextPower *= payoutRatio;
     const nextSum = geometricSum + nextPower;
     if (totalPrizePool / nextSum < minimumPayout) break;
@@ -151,41 +157,25 @@ const reconcilePayouts = (
 
   if (!Number.isInteger(unitDifference)) return null;
 
-  while (unitDifference > 0) {
+  while (unitDifference !== 0) {
+    const direction = unitDifference > 0 ? 1 : -1;
     let bestIndex = -1;
     let bestMarginalError = Number.POSITIVE_INFINITY;
 
-    for (let index = 0; index < units.length; index += 1) {
-      const canIncrease = index === 0 || units[index] < units[index - 1];
-      if (!canIncrease) continue;
+    for (let offset = 0; offset < units.length; offset += 1) {
+      const index = direction === 1 ? offset : units.length - offset - 1;
+      const canAdjust =
+        direction === 1
+          ? index === 0 || units[index] < units[index - 1]
+          : units[index] > minimumUnits &&
+            (index === units.length - 1 || units[index] > units[index + 1]);
+      if (!canAdjust) continue;
 
       const currentError = Math.abs(units[index] - targets[index]);
-      const increasedError = Math.abs(units[index] + 1 - targets[index]);
-      const marginalError = increasedError - currentError;
-
-      if (marginalError < bestMarginalError - Number.EPSILON) {
-        bestMarginalError = marginalError;
-        bestIndex = index;
-      }
-    }
-
-    units[bestIndex] += 1;
-    unitDifference -= 1;
-  }
-
-  while (unitDifference < 0) {
-    let bestIndex = -1;
-    let bestMarginalError = Number.POSITIVE_INFINITY;
-
-    for (let index = units.length - 1; index >= 0; index -= 1) {
-      const canDecrease =
-        units[index] > minimumUnits &&
-        (index === units.length - 1 || units[index] > units[index + 1]);
-      if (!canDecrease) continue;
-
-      const currentError = Math.abs(units[index] - targets[index]);
-      const decreasedError = Math.abs(units[index] - 1 - targets[index]);
-      const marginalError = decreasedError - currentError;
+      const adjustedError = Math.abs(
+        units[index] + direction - targets[index],
+      );
+      const marginalError = adjustedError - currentError;
 
       if (marginalError < bestMarginalError - Number.EPSILON) {
         bestMarginalError = marginalError;
@@ -194,8 +184,8 @@ const reconcilePayouts = (
     }
 
     if (bestIndex === -1) return null;
-    units[bestIndex] -= 1;
-    unitDifference += 1;
+    units[bestIndex] += direction;
+    unitDifference -= direction;
   }
 
   return units.map((value) => value * inputs.roundingIncrement);
@@ -215,29 +205,32 @@ export function calculatePayoutSchedule(
   if (inputError) return inputError;
 
   const maximumPaidPlaceCount = maximumIdealPaidPlaceCount(inputs);
-  if (maximumPaidPlaceCount > 1_000) {
+  const minimumUnits = Math.ceil(
+    inputs.minimumPayout / inputs.roundingIncrement,
+  );
+  const totalUnits = inputs.totalPrizePool / inputs.roundingIncrement;
+  const maximumRoundedPaidPlaceCount = Math.min(
+    maximumPaidPlaceCount,
+    Math.floor(totalUnits / minimumUnits),
+  );
+
+  if (maximumRoundedPaidPlaceCount > 1_000) {
     return calculationError(
       "schedule-limit",
       "This schedule exceeds the 1,000-place limit. Increase the minimum payout or payout ratio.",
     );
   }
 
-  for (
-    let paidPlaceCount = maximumPaidPlaceCount;
-    paidPlaceCount >= 1;
-    paidPlaceCount -= 1
-  ) {
-    const payouts = reconcilePayouts(inputs, paidPlaceCount);
-    if (payouts && isValidSchedule(inputs, payouts)) {
-      return {
-        ok: true,
-        payouts,
-        paidPlaceCount: payouts.length,
-        distributedTotal: inputs.totalPrizePool,
-        paidPlaceCountReducedByRounding:
-          paidPlaceCount < maximumPaidPlaceCount,
-      };
-    }
+  const payouts = reconcilePayouts(inputs, maximumRoundedPaidPlaceCount);
+  if (payouts && isValidSchedule(inputs, payouts)) {
+    return {
+      ok: true,
+      payouts,
+      paidPlaceCount: payouts.length,
+      distributedTotal: inputs.totalPrizePool,
+      paidPlaceCountReducedByRounding:
+        maximumRoundedPaidPlaceCount < maximumPaidPlaceCount,
+    };
   }
 
   return calculationError(
