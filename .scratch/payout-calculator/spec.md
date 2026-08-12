@@ -1,156 +1,135 @@
 # Poker Tournament Payout Calculator
 
-## Summary
+Status: ready-for-agent
 
-Build a backendless single-page calculator that converts a poker tournament's total prize pool into a rounded payout schedule. The calculator is intended exclusively for Safari on iPhone and produces the maximum qualifying number of paid places while preserving the chosen payout ratio, minimum payout, rounding increment, and exact total.
+## Problem Statement
 
-## Product boundary
+Poker tournament organizers need to divide a total prize pool into a practical payout schedule without manually calculating a geometric distribution, checking the minimum payout, rounding every amount to usable denominations, and reconciling rounding differences. Manual calculations make it easy to distribute the wrong total, violate the intended payout ratio, or pay the last place less than the allowed minimum.
 
-The first version provides one calculator page with inputs, inline validation, an immediately calculated payout schedule, a result summary, and a reset action.
+The organizer needs a fast, deterministic calculator designed for Safari on an iPhone. It must work without a backend and must visibly account for every NOK in the total prize pool.
 
-It does not include accounts, saved tournaments, browser persistence, import or export, URL sharing, provider-specific deployment, service workers, installation prompts, or other PWA behavior. It produces a static build that can be hosted without a backend.
+## Solution
 
-## Inputs
+Provide a compact single-page calculator with four inputs: total prize pool, payout ratio, minimum payout, and rounding increment. It constructs an ideal payout schedule as a geometric sequence, finds the maximum qualifying number of paid places, and produces a final payout schedule whose rounded payouts sum exactly to the total prize pool.
 
-### Total prize pool
+The result updates immediately when the inputs are valid. It lists each paid place as `#1`, `#2`, and so on, formats payouts as NOK, and confirms that the entire total prize pool has been distributed. Invalid or infeasible input produces specific inline guidance instead of a stale or partial schedule.
 
-- Positive whole NOK.
-- Initially blank.
-- Must be at least the minimum payout.
-- Must be divisible by the rounding increment so every payout can be rounded while the schedule still distributes the exact total.
-- Must be a JavaScript safe integer.
+## User Stories
 
-### Payout ratio
+1. As a poker tournament organizer, I want to enter the total prize pool in whole NOK, so that I can calculate how the available money should be distributed.
+2. As a poker tournament organizer, I want the total prize pool to start blank, so that I do not mistake example data for my tournament's value.
+3. As a poker tournament organizer, I want a default payout ratio of `1.87`, so that I can quickly use the standard distribution without entering every setting.
+4. As a poker tournament organizer, I want to change the payout ratio, so that I can control how strongly payouts increase toward first place.
+5. As a poker tournament organizer, I want to use a payout ratio of `1.00`, so that I can produce equal ideal payouts when needed.
+6. As a Norwegian iPhone user, I want to enter the payout ratio with either a comma or a period, so that the calculator works naturally with my numeric keyboard.
+7. As a poker tournament organizer, I want the payout ratio limited to two decimal places, so that its precision is predictable.
+8. As a poker tournament organizer, I want a default minimum payout of NOK 200, so that the standard floor is ready immediately.
+9. As a poker tournament organizer, I want to change the minimum payout, so that the schedule follows the rules of my tournament.
+10. As a poker tournament organizer, I want a default rounding increment of NOK 25, so that payouts use practical cash denominations by default.
+11. As a poker tournament organizer, I want to change the rounding increment, so that payouts match the denominations available to me.
+12. As a poker tournament organizer, I want the largest valid number of paid places, so that as many finishing positions as possible receive money without weakening the agreed distribution rules.
+13. As a poker tournament organizer, I want adjacent ideal payouts to follow the payout ratio exactly, so that the intended distribution has an unambiguous mathematical basis.
+14. As a poker tournament organizer, I want the ideal payout schedule scaled to the total prize pool, so that its proportions describe the complete amount available.
+15. As a poker tournament organizer, I want both the ideal and final last payouts to meet the minimum payout, so that rounding cannot create an impermissibly small award.
+16. As a poker tournament organizer, I want the calculator to retry with one fewer paid place when rounding makes a candidate infeasible, so that I still receive a valid schedule.
+17. As a poker tournament organizer, I want a one-place payout schedule to be valid, so that a small qualifying total can still be distributed.
+18. As a poker tournament organizer, I want every final payout to be a multiple of the rounding increment, so that every displayed amount is actually payable in the chosen denomination.
+19. As a poker tournament organizer, I want payouts to remain non-increasing by finishing place, so that a worse-finishing player never receives more than a better-finishing player.
+20. As a poker tournament organizer, I want adjacent payouts to be allowed to tie after rounding, so that practical denominations do not unnecessarily reduce the number of paid places.
+21. As a poker tournament organizer, I want rounding reconciliation to minimize total absolute NOK deviation from the ideal payout schedule, so that the final result remains as faithful as possible to the intended distribution.
+22. As a poker tournament organizer, I want equal-error reconciliation choices to favor the better-finishing place, so that ambiguous cases resolve deterministically and consistently with tournament ranking.
+23. As a poker tournament organizer, I want the final payouts to sum exactly to the total prize pool, so that no money is created, discarded, or left undistributed.
+24. As a poker tournament organizer, I want a clear error when the total prize pool is not divisible by the rounding increment, so that I understand why an exact rounded schedule cannot be produced.
+25. As a poker tournament organizer, I want a minimum payout that is not divisible by the rounding increment to remain valid, so that the final last payout can use the next qualifying increment.
+26. As a poker tournament organizer, I want invalid, non-finite, unsafe, or out-of-range values rejected, so that the displayed schedule is trustworthy.
+27. As a poker tournament organizer, I want the total prize pool to be at least the minimum payout, so that every successful schedule can pay at least one place legally.
+28. As a poker tournament organizer, I want a clear error when a schedule would exceed 1,000 paid places, so that the app remains responsive instead of truncating or attempting an impractical result.
+29. As a poker tournament organizer, I want an over-limit message to suggest raising the minimum payout or payout ratio, so that I know how to produce a smaller schedule.
+30. As a poker tournament organizer, I want results to update immediately when all inputs are valid, so that I can compare scenarios quickly.
+31. As a poker tournament organizer, I want validation to avoid interrupting a potentially valid partial edit, so that entering a value such as `1,87` feels natural.
+32. As a poker tournament organizer, I want an invalid field explained after I leave it or once it becomes definitively invalid, so that errors are timely without being distracting.
+33. As a poker tournament organizer, I want stale results hidden whenever current inputs are invalid, so that I cannot mistake an old schedule for the current calculation.
+34. As a poker tournament organizer, I want validation next to the relevant input, so that I can quickly identify what needs correction.
+35. As a poker tournament organizer, I want a note when rounding forces one fewer paid place, so that the result does not appear arbitrary.
+36. As a poker tournament organizer, I want the final payout schedule shown as a simple ordered table, so that I can read each place and payout quickly.
+37. As a poker tournament organizer, I want place labels shown as `#1`, `#2`, and so on, so that the ranking is compact and unambiguous.
+38. As a Norwegian user, I want payout amounts formatted in NOK using Norwegian grouping conventions, so that the values are easy to read.
+39. As a poker tournament organizer, I want to see the paid-place count, so that I know how many players receive a payout.
+40. As a poker tournament organizer, I want confirmation of the distributed amount against the total prize pool, so that I can verify at a glance that the schedule accounts for every NOK.
+41. As a poker tournament organizer, I want only actionable final payouts shown, so that unrounded mathematical details do not clutter the workflow.
+42. As a poker tournament organizer, I want to reset the calculator, so that I can clear the total prize pool and restore the default ratio, minimum, and rounding increment.
+43. As an iPhone user, I want controls that invoke suitable on-screen numeric keyboards, so that entering values is efficient.
+44. As an iPhone user, I want a compact portrait-oriented single-column layout, so that the entire calculator is comfortable to use on my phone.
+45. As an iPhone user, I want the layout to work across current iPhone widths up to 430 CSS pixels, so that it remains usable on different current devices.
+46. As an iPhone user, I want the same single-column interface to remain usable in landscape, so that rotating the phone does not break the calculator.
+47. As a tournament organizer, I want a focused poker-inspired visual design, so that the calculator feels appropriate without decorative casino imagery obscuring its purpose.
+48. As a tournament organizer, I want the calculator delivered as a static client-side app, so that it can be hosted without operating a backend.
 
-- Target ratio between adjacent payouts in the ideal payout schedule.
-- Default: `1.87`.
-- Minimum: `1.00`.
-- At most two decimal places.
-- Accept both comma and period as the decimal separator.
-- Must be finite.
+## Implementation Decisions
 
-### Minimum payout
-
-- Positive whole NOK.
-- Default: `200`.
-- Applies to the final payout for the last paid place as well as to the corresponding ideal payout.
-- Does not need to be divisible by the rounding increment. The lowest possible final payout is therefore the smallest multiple of the rounding increment that meets the minimum.
-- Must be a JavaScript safe integer.
-
-### Rounding increment
-
-- Positive whole NOK.
-- Default: `25`.
-- Must be a JavaScript safe integer.
-
-Money inputs use plain whole-number entry without currency symbols or grouping separators. The payout-ratio input uses an iPhone-appropriate decimal keypad.
-
-## Calculation model
-
-For a candidate count of `n` paid places, construct an ideal payout schedule as a geometric sequence:
-
-- Each better-finishing place receives exactly `payout ratio ×` the next place's ideal payout.
-- Scale the sequence so that all ideal payouts sum to the total prize pool.
-- A ratio of `1.00` produces equal ideal payouts.
-
-The qualifying paid-place count is the greatest `n` for which:
-
-1. The last ideal payout meets the minimum payout.
-2. A final rounded payout schedule exists that meets every final-schedule invariant.
-
-If rounding makes the largest ideal-qualified count infeasible, retry with one fewer paid place until a valid schedule is found. A single paid place receiving the entire total prize pool is valid when the total meets all input constraints.
-
-The calculator must reject rather than generate or display a schedule of more than 1,000 paid places. The message must identify this as the app's schedule limit and suggest increasing the minimum payout or payout ratio.
-
-## Rounding and reconciliation
-
-Create the final payout schedule from the ideal payout schedule by selecting rounded payouts that minimize the sum of absolute NOK differences from their corresponding ideal payouts.
-
-The optimizer may move a payout more than one increment away from ordinary nearest rounding when required to satisfy the invariants. When multiple valid adjustments have equal error, favor the better-finishing place.
-
-Every successful final payout schedule must:
-
-- Contain only whole-NOK payouts that are multiples of the rounding increment.
-- Be non-increasing by finishing place; adjacent places may tie because of rounding.
-- Give the last paid place at least the minimum payout.
-- Sum exactly to the total prize pool.
-- Use the maximum qualifying paid-place count.
-
-Money must never be created, discarded, or left undistributed.
-
-## Interaction and validation
-
-- Recalculate immediately whenever all inputs are valid.
-- Hide a previous result whenever the current inputs are invalid.
-- Avoid flashing errors during a potentially valid partial edit, such as `1,` in the payout-ratio field.
-- Show an error after an invalid field loses focus or as soon as its value is definitively invalid.
-- Present errors next to the relevant input.
-- Never silently coerce an invalid value or truncate a result.
-- Reset clears the total prize pool and restores payout ratio `1.87`, minimum payout `200`, and rounding increment `25`.
-
-If rounding causes the final schedule to use fewer paid places than the largest ideal-qualified candidate, show a short note explaining that the count was reduced to preserve the minimum payout and exact total.
-
-## Results
-
-Display the final payout schedule as an ordered table. Each row contains:
-
-- A place label using `#1`, `#2`, and so on.
-- A payout formatted in NOK using the `nb-NO` locale, for example `1 250 kr`.
-
-Also display:
-
-- The number of paid places.
-- A confirmation in the form `Distributed: 10 000 kr of 10 000 kr`.
-
-Do not expose ideal payouts, raw calculation details, or rounding-error measurements in the interface.
-
-## Visual and device scope
-
-- Compact, single-column design optimized for an iPhone portrait viewport around 390 CSS pixels wide.
-- Fluid layout through current iPhone widths, capped at 430 CSS pixels and centered on wider screens.
-- Keep the same single-column layout in landscape without dedicated landscape optimization.
-- Dark-green palette, restrained gold accents, and strong contrast.
-- Poker-inspired but utilitarian, with no decorative casino imagery.
-- One compact input card followed by one results card.
-
-Support the current and previous major iOS Safari releases. There is no dedicated design or testing requirement for iPad, desktop, legacy browsers, physical-keyboard navigation, screen readers, or WCAG conformance. Retain visible labels, ordinary semantic form controls, readable validation, and suitable iPhone on-screen keyboard modes as baseline usability.
-
-## Technical direction
-
-- Vite, React, and TypeScript.
-- Keep calculation and reconciliation logic in framework-independent pure functions.
-- Produce a static production build.
+- Build the app with Vite, React, and TypeScript and produce a static production bundle.
+- Keep calculation and reconciliation behind one framework-independent pure boundary. It accepts validated total prize pool, payout ratio, minimum payout, and rounding increment values and returns either a complete result or a typed domain error.
+- Keep text-entry parsing and interaction validation outside the pure calculator. Comma and period decimal separators normalize to the same payout-ratio value.
+- Treat whole-NOK inputs as positive JavaScript safe integers. Reject non-finite, unsafe, malformed, zero, and negative values. The payout ratio must be finite, at least `1.00`, and have at most two decimal places.
+- Require the total prize pool to be at least the minimum payout and divisible by the rounding increment.
+- Construct each candidate ideal payout schedule as a geometric sequence whose adjacent ratio is the payout ratio and whose sum is the total prize pool. A ratio of `1.00` produces equal values.
+- Find the greatest candidate paid-place count whose last ideal payout meets the minimum payout and for which a valid final payout schedule exists.
+- Reject a calculation if it would require more than 1,000 paid places. Do not truncate or partially render it.
+- Produce the final payout schedule by selecting multiples of the rounding increment that minimize the sum of absolute NOK deviations from the ideal payout schedule.
+- Allow reconciliation to move a payout more than one increment away from ordinary nearest rounding when required to satisfy all invariants.
+- Resolve equal-error alternatives by favoring the better-finishing place.
+- Guarantee that final payouts are non-increasing, may tie, meet the minimum at the last paid place, and sum exactly to the total prize pool.
+- Retry with one fewer paid place when rounding makes the current ideal-qualified candidate infeasible. Report whether this reduction occurred so the interface can explain it.
+- Permit a one-place payout schedule when all input constraints are satisfied.
+- Recalculate during editing whenever all inputs are valid. Hide the previous result whenever they are not.
+- Delay validation feedback for potentially valid partial edits until blur, while showing definitively invalid states immediately.
+- Never silently coerce invalid values, truncate schedules, or display a partial payout schedule.
+- Initialize the total prize pool as blank and the other inputs as payout ratio `1.87`, minimum payout `200`, and rounding increment `25`.
+- Reset to that same initial state.
+- Format final payouts with the `nb-NO` locale and NOK currency conventions. Label places as `#1`, `#2`, and so on.
+- Show the number of paid places and an exact-distribution confirmation such as `Distributed: 10 000 kr of 10 000 kr`.
+- Do not expose the ideal payout schedule or error measurements in the interface.
+- Show a concise explanation when rounding forces a lower paid-place count.
+- Show an actionable error for the 1,000-place technical limit that suggests increasing the minimum payout or payout ratio.
+- Use a compact single-column interface with one input card followed by one results card. Make it fluid through 430 CSS pixels, optimize around 390 CSS pixels in portrait, and center it at a maximum width of 430 CSS pixels on larger viewports.
+- Retain the same usable single-column layout in landscape without creating a dedicated landscape layout.
+- Use a dark-green palette, restrained gold accents, and strong contrast without decorative casino imagery.
+- Target the current and previous major iOS Safari releases.
+- Use visible labels, semantic form controls, readable validation, and suitable iPhone input modes as baseline usability. Do not claim or test formal accessibility conformance.
 - Do not add a backend or provider-specific hosting configuration.
 
-## Verification
+## Testing Decisions
 
-### Calculation tests
+- Test external behavior and domain guarantees rather than internal helper functions or a particular reconciliation implementation.
+- Use two high-level seams: the pure calculator boundary for exhaustive domain behavior and the rendered SPA for complete user workflows. Add no lower-level seams unless a defect cannot be reproduced clearly at either boundary.
+- Use Vitest for focused calculator examples and property-based tests over valid generated inputs.
+- At the calculator seam, assert that every successful result distributes the exact total, uses only rounding-increment multiples, is non-increasing, meets the minimum payout, and selects the maximum qualifying paid-place count.
+- At the calculator seam, cover ratio `1.00`, a single-place schedule, a minimum not divisible by the rounding increment, a total not divisible by the increment, equal-error tie-breaking, and a candidate count reduced by rounding.
+- At the calculator seam, cover malformed, non-finite, unsafe, zero, negative, and out-of-range inputs as well as schedules exceeding 1,000 paid places.
+- At the browser seam, use WebKit with an iPhone-sized viewport to cover initial defaults and guidance, valid entry, immediate recalculation, comma and period ratio entry, validation timing, stale-result removal, result formatting, exact-distribution confirmation, rounding reconciliation, the paid-place reduction note, the technical-limit error, and reset.
+- Do not assert component structure, CSS class names, private helper calls, intermediate ideal values, or a particular optimization algorithm when the same behavior can be verified through the two public seams.
+- There is no existing application or test suite to use as prior art; this is a greenfield repository. Establish these seams as the initial testing convention.
 
-Use Vitest for focused examples and property-based coverage. Verify, across valid generated inputs, that:
+## Out of Scope
 
-- The payouts sum to the exact total prize pool.
-- Every payout is a multiple of the rounding increment.
-- Payouts are non-increasing.
-- The last payout meets the minimum.
-- The selected paid-place count is maximal under the qualification rules.
-- Equal-error reconciliation favors the better-finishing place.
-- Ratio `1.00`, a single-place result, a non-divisible total, a non-divisible minimum, and rounding-induced place reduction behave as specified.
-- Unsafe, non-finite, malformed, and out-of-range inputs are rejected.
-- Results over 1,000 paid places are rejected without attempting to render them.
+- A backend, database, accounts, authentication, or server-side calculation.
+- Saving tournaments or calculator state in browser storage.
+- Import, export, printing, or downloadable reports.
+- URL-encoded shareable state or other sharing features.
+- Provider-specific deployment configuration or a deployment pipeline.
+- Service workers, offline installation, installation prompts, or PWA behavior.
+- Dedicated layouts or compatibility work for desktop, iPad, legacy browsers, or Android browsers.
+- Dedicated landscape optimization.
+- Physical-keyboard workflows or keyboard-only navigation testing.
+- Screen-reader testing, WCAG conformance work, or an accessibility-conformance claim.
+- Showing ideal payouts, calculation internals, or rounding-error measurements to users.
+- Schedules containing more than 1,000 paid places.
+- Arbitrary business maximums below JavaScript's numeric safety boundaries.
 
-### Browser tests
+## Further Notes
 
-Run a small WebKit suite at an iPhone-sized viewport covering:
-
-- Initial default values and guidance before a total is entered.
-- Valid entry and immediate recalculation.
-- Comma and period ratio input.
-- Validation timing and stale-result removal.
-- Exact-distribution confirmation.
-- A rounding-reconciliation scenario.
-- The rounding-induced place-count note.
-- Reset behavior.
-
-## Acceptance criteria
-
-The feature is complete when a user can enter valid values in iPhone Safari and receive a deterministic payout schedule satisfying every calculation invariant, with the exact total visibly confirmed, invalid inputs handled as specified, and the automated calculation and browser suites passing.
+- The canonical domain vocabulary is defined in the repository glossary. Use **total prize pool**, **ideal payout schedule**, **payout schedule**, **paid place**, **payout**, **payout ratio**, **minimum payout**, and **rounding increment** consistently.
+- The 1,000-place ceiling is an operational safety limit, not a poker tournament business rule.
+- The minimum payout is a floor rather than a denomination. For example, a NOK 210 minimum with a NOK 25 rounding increment permits a final last payout of NOK 225.
+- The user explicitly confirmed the calculation, interaction, visual, device, implementation, and testing decisions through a design interview before this spec was published.
+- No ADR is needed for the current decisions: the repository is greenfield, the backendless SPA boundary was an initial requirement, and no surprising hard-to-reverse trade-off has been selected.
