@@ -109,6 +109,11 @@ button:active {
   transform: translateY(1px);
 }
 
+button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 label {
   display: grid;
   gap: 7px;
@@ -181,6 +186,30 @@ input[aria-invalid="true"] {
   border-bottom: 1px solid rgb(255 255 255 / 8%);
 }
 
+.results-card {
+  padding: 0;
+}
+
+.payout-image {
+  padding: 18px;
+  background: linear-gradient(145deg, rgb(19 67 57 / 96%), rgb(10 43 37 / 98%));
+}
+
+.copy-actions {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid rgb(255 255 255 / 7%);
+}
+
+.copy-message {
+  margin: 0;
+  color: #b9cec5;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
 .place-count {
   flex: none;
   margin-bottom: 0;
@@ -250,6 +279,20 @@ td {
 
   section {
     padding: 15px;
+  }
+
+  .results-card {
+    padding: 0;
+  }
+
+  .payout-image {
+    padding: 15px;
+  }
+
+  .copy-actions {
+    padding-right: 15px;
+    padding-bottom: 15px;
+    padding-left: 15px;
   }
 }
 
