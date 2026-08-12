@@ -62,7 +62,7 @@ const isCompleteValidEntry = (name: FieldName, raw: string) =>
     ? parsePayoutRatio(raw) !== null
     : parseWholeNok(raw) !== null;
 
-const evaluate = (values: InputValues) => {
+const evaluatePayoutForm = (values: InputValues) => {
   const errors: FieldErrors = {};
   const totalPrizePool = parseWholeNok(values.totalPrizePool);
   const payoutRatio = parsePayoutRatio(values.payoutRatio);
@@ -104,7 +104,7 @@ const evaluate = (values: InputValues) => {
 export function App() {
   const [values, setValues] = useState<InputValues>(initialValues);
   const [touched, setTouched] = useState<Partial<Record<FieldName, boolean>>>({});
-  const evaluation = useMemo(() => evaluate(values), [values]);
+  const evaluation = useMemo(() => evaluatePayoutForm(values), [values]);
 
   const updateValue = (name: FieldName, value: string) => {
     setValues((current) => ({ ...current, [name]: value }));
