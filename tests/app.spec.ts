@@ -82,6 +82,41 @@ async function installImageClipboard(
   }, behavior);
 }
 
+async function capturePayoutImageContent(page: Page) {
+  await page.addInitScript(() => {
+    const serializeToString = XMLSerializer.prototype.serializeToString;
+    XMLSerializer.prototype.serializeToString = function (root: Node) {
+      if (root instanceof Element) {
+        const title = root.querySelector("[data-payout-image-title]");
+        const footer = root.querySelector("[data-payout-image-footer]");
+        if (title && footer) {
+          Object.defineProperty(window, "__payoutImageContent", {
+            configurable: true,
+            value: {
+              title: title.textContent,
+              footer: footer.textContent,
+              note: root.querySelector(".result-note")?.textContent ?? null,
+            },
+          });
+        }
+      }
+      return serializeToString.call(this, root);
+    };
+  });
+}
+
+async function lastPayoutImageContent(page: Page) {
+  return page.evaluate(() =>
+    (window as Window & {
+      __payoutImageContent?: {
+        title: string | null;
+        footer: string | null;
+        note: string | null;
+      };
+    }).__payoutImageContent,
+  );
+}
+
 type ContentBounds = { x: number; y: number; width: number; height: number };
 
 async function inspectCopiedImage(
@@ -212,6 +247,8 @@ test("organizer can copy the complete payout schedule as a PNG", async ({
   page,
 }) => {
   await installImageClipboard(page);
+  await capturePayoutImageContent(page);
+  await page.clock.setFixedTime(new Date("2026-08-13T12:00:00+02:00"));
   await page.goto("/");
 
   const result = page.getByRole("region", { name: "Payout schedule" });
@@ -253,6 +290,11 @@ test("organizer can copy the complete payout schedule as a PNG", async ({
   expect(image!.height).toBeLessThan(Math.round(resultBounds!.height * 2));
   expect(image!.height).toBeGreaterThan(1_500);
   expect(image!.alpha).toBe(255);
+  expect(await lastPayoutImageContent(page)).toEqual({
+    title: "13.08.2026",
+    footer: "Total prize pool: 500 kr",
+    note: null,
+  });
   expect(image!.lightPixels.top).toBeGreaterThan(50);
   expect(image!.lightPixels.middle).toBeGreaterThan(50);
   expect(image!.lightPixels.bottom).toBeGreaterThan(50);
@@ -339,8 +381,10 @@ test("denied clipboard permission shows an error without downloading", async ({
 test("organizer can explicitly download the payout schedule as a timestamped PNG", async ({
   page,
 }) => {
+  await capturePayoutImageContent(page);
+  await page.clock.setFixedTime(new Date("2026-08-13T12:00:00+02:00"));
   await page.goto("/");
-  await page.getByLabel("Total prize pool").fill("200");
+  await page.getByLabel("Total prize pool").fill("8000");
 
   const imageActionButtons = page.locator(".image-action-buttons button");
   const copy = imageActionButtons.first();
@@ -356,6 +400,11 @@ test("organizer can explicitly download the payout schedule as a timestamped PNG
   expect(downloadedPng.subarray(0, 8)).toEqual(
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
   );
+  expect(await lastPayoutImageContent(page)).toEqual({
+    title: "13.08.2026",
+    footer: "Total prize pool: 8 000 kr",
+    note: null,
+  });
   await expect(downloadButton).toHaveText("Downloaded!");
   await expect(copy).toBeEnabled();
   await expect(downloadButton).toHaveText("Download image", { timeout: 3_000 });
@@ -620,6 +669,7 @@ test("organizer is told when rounding reduces the paid-place count", async ({
   page,
 }) => {
   await installImageClipboard(page);
+  await capturePayoutImageContent(page);
   await page.goto("/");
   await page.getByLabel("Payout ratio").fill("1");
   await page.getByLabel("Minimum payout").fill("151");
@@ -646,6 +696,9 @@ test("organizer is told when rounding reduces the paid-place count", async ({
   );
   const [noteLightPixels] = image!.contentPixelCounts!;
   expect(noteLightPixels).toBeGreaterThan(5);
+  expect((await lastPayoutImageContent(page))?.note?.trim()).toBe(
+    "Paid places were reduced to preserve the minimum payout and exact total.",
+  );
 });
 
 test("the calculator remains contained on iPhone portrait and landscape", async ({

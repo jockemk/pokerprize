@@ -12,6 +12,10 @@ _Avoid_: Prize money, total amount
 The final ordered list assigning a rounded payout to each paid place.
 _Avoid_: Prize pool, prize list
 
+**Payout image**:
+A shareable PNG representation of a payout schedule.
+_Avoid_: Schedule image, payout schedule image
+
 **Ideal payout schedule**:
 The unrounded geometric sequence used as the target when producing a payout schedule.
 _Avoid_: Raw payouts, calculated prize pool

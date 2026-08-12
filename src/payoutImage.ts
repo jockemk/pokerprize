@@ -5,6 +5,11 @@ const OPAQUE_CARD_BACKGROUND = "#0a2b25";
 const MAX_WEBKIT_IMAGE_DIMENSION = 8_192;
 const MAX_WEBKIT_IMAGE_AREA = 8_192 * 8_192;
 
+export type PayoutImageContent = {
+  title: string;
+  totalPrizePool: string;
+};
+
 const isSafeImageSize = (width: number, height: number, scale: number) => {
   const outputWidth = Math.ceil(width * scale);
   const outputHeight = Math.ceil(height * scale);
@@ -64,6 +69,7 @@ const encodePng = (canvas: HTMLCanvasElement) =>
 export async function renderPayoutScheduleImage(
   element: HTMLElement,
   scale: number,
+  content: PayoutImageContent,
 ) {
   await document.fonts?.ready;
 
@@ -72,6 +78,15 @@ export async function renderPayoutScheduleImage(
   const height = Math.ceil(element.scrollHeight);
   const clone = element.cloneNode(true) as HTMLElement;
   copyComputedStyles(element, clone);
+
+  const title = clone.querySelector("[data-payout-image-title]");
+  const footer = clone.querySelector("[data-payout-image-footer]");
+  if (!title || !footer) {
+    throw new Error("The payout image content could not be prepared.");
+  }
+  title.textContent = content.title;
+  footer.textContent = `Total prize pool: ${content.totalPrizePool}`;
+
   clone.style.margin = "0";
   clone.style.width = `${width}px`;
   clone.style.height = `${height}px`;

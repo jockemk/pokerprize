@@ -9,6 +9,7 @@ import {
 import {
   planPayoutImageScale,
   renderPayoutScheduleImage,
+  type PayoutImageContent,
 } from "./payoutImage";
 
 type FieldName = keyof PayoutInputs;
@@ -65,6 +66,20 @@ const fields: Array<{
 
 const formatNok = (value: number) =>
   `${new Intl.NumberFormat("nb-NO", { maximumFractionDigits: 0 }).format(value)} kr`;
+
+const payoutImageDateFormatter = new Intl.DateTimeFormat("nb-NO", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
+
+const payoutImageContent = (
+  date: Date,
+  totalPrizePool: number,
+): PayoutImageContent => ({
+  title: payoutImageDateFormatter.format(date),
+  totalPrizePool: formatNok(totalPrizePool).replaceAll("\u00a0", " "),
+});
 
 const percentageFormatter = new Intl.NumberFormat("nb-NO", {
   style: "percent",
@@ -169,6 +184,11 @@ export function App() {
     const element = payoutImageRef.current;
     if (!element || imageActionsDisabled) return;
     const imageActionAttempt = ++imageActionAttemptRef.current;
+    const imageCreatedAt = new Date();
+    const imageContent = payoutImageContent(
+      imageCreatedAt,
+      evaluation.result!.distributedTotal,
+    );
     const isCurrentAttempt = () =>
       imageActionAttemptRef.current === imageActionAttempt;
 
@@ -195,7 +215,11 @@ export function App() {
     }
 
     setImageActionState({ phase: "rendering", action: "copy" });
-    const imageBlobPromise = renderPayoutScheduleImage(element, scale);
+    const imageBlobPromise = renderPayoutScheduleImage(
+      element,
+      scale,
+      imageContent,
+    );
 
     const reportRenderFailure = () => {
       if (!isCurrentAttempt()) return;
@@ -243,6 +267,11 @@ export function App() {
     const element = payoutImageRef.current;
     if (!element || imageActionsDisabled) return;
     const imageActionAttempt = ++imageActionAttemptRef.current;
+    const imageCreatedAt = new Date();
+    const imageContent = payoutImageContent(
+      imageCreatedAt,
+      evaluation.result!.distributedTotal,
+    );
     const isCurrentAttempt = () =>
       imageActionAttemptRef.current === imageActionAttempt;
 
@@ -256,11 +285,11 @@ export function App() {
     }
 
     setImageActionState({ phase: "rendering", action: "download" });
-    void renderPayoutScheduleImage(element, scale).then(
+    void renderPayoutScheduleImage(element, scale, imageContent).then(
       (blob) => {
         if (!isCurrentAttempt()) return;
         try {
-          downloadPng(blob);
+          downloadPng(blob, imageCreatedAt);
         } catch {
           setImageActionState({
             phase: "error",
@@ -353,7 +382,9 @@ export function App() {
         <section className="results-card" aria-labelledby="results-title">
           <div className="payout-image" ref={payoutImageRef}>
             <div className="section-heading results-heading">
-              <h2 id="results-title">Payout schedule</h2>
+              <h2 id="results-title" data-payout-image-title>
+                Payout schedule
+              </h2>
               <p className="place-count">
                 {evaluation.result.paidPlaceCount} paid{" "}
                 {evaluation.result.paidPlaceCount === 1 ? "place" : "places"}
@@ -375,7 +406,7 @@ export function App() {
                 ))}
               </tbody>
             </table>
-            <p className="distribution-total">
+            <p className="distribution-total" data-payout-image-footer>
               Distributed: {formatNok(evaluation.result.distributedTotal)} of{" "}
               {formatNok(Number(values.totalPrizePool))}
             </p>
